@@ -3,7 +3,11 @@ echo "Configuring and building Thirdparty/DBoW2 ..."
 cd Thirdparty/DBoW2
 mkdir build
 cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake .. \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBOOST_ROOT=/opt/homebrew \
+  -DBoost_INCLUDE_DIR=/opt/homebrew/include \
+  -DBoost_LIBRARY_DIR=/opt/homebrew/lib
 make -j
 
 cd ../../g2o

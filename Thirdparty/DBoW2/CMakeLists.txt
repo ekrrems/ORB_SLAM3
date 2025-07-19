@@ -1,5 +1,9 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.30)
 project(DBoW2)
+
+# Add Boost headers manually for macOS/Homebrew
+include_directories(/opt/homebrew/include)
+link_directories(/opt/homebrew/lib)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
