@@ -21,6 +21,7 @@
 #include "System.h"
 #include "Converter.h"
 #include <thread>
+#include <vector>
 #include <pangolin/pangolin.h>
 #include <iomanip>
 #include <openssl/md5.h>
@@ -32,6 +33,8 @@
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/xml_iarchive.hpp>
 #include <boost/archive/xml_oarchive.hpp>
+
+#include<opencv2/core/core.hpp>
 
 namespace ORB_SLAM3
 {
@@ -230,7 +233,7 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //if(false) // TODO
     {
         mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,strSettingsFile,settings_);
-        mptViewer = new thread(&Viewer::Run, mpViewer);
+        // mptViewer = new thread(&Viewer::Run, mpViewer);
         mpTracker->SetViewer(mpViewer);
         mpLoopCloser->mpViewer = mpViewer;
         mpViewer->both = mpFrameDrawer->both;
@@ -471,6 +474,44 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
     mTrackedKeyPointsUn = mpTracker->mCurrentFrame.mvKeysUn;
 
     return Tcw;
+}
+
+std::vector<cv::Point3f> System::GetTrackedMapPointsAsCv()
+{
+    unique_lock<mutex> lock(mMutexState);
+    std::vector<cv::Point3f> points;
+
+    for (auto mp : mTrackedMapPoints)
+    {
+        if (mp && !mp->isBad())
+        {
+            Eigen::Vector3f eig_pos = mp->GetWorldPos();
+			cv::Point3f pos(eig_pos[0], eig_pos[1], eig_pos[2]);
+			points.emplace_back(pos);
+        }
+    }
+
+    return points;
+}
+
+cv::Mat System::GetCurrentCameraPose()
+{
+    unique_lock<mutex> lock(mMutexState);
+    if (!mTrackedMapPoints.empty())
+    {
+        Sophus::SE3f Tcw = mpTracker->mCurrentFrame.GetPose();
+        Eigen::Matrix4f eigMat = Tcw.matrix();  // Convert to Eigen 4x4
+
+        // Now convert Eigen::Matrix4f → cv::Mat
+        cv::Mat cvMat(4, 4, CV_32F);
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j)
+                cvMat.at<float>(i, j) = eigMat(i, j);
+
+        return cvMat;
+    }
+
+    return cv::Mat();  // Empty if no pose
 }
 
 
@@ -1149,59 +1190,6 @@ void System::SaveKeyFrameTrajectoryEuRoC(const string &filename, Map* pMap)
     }
     f.close();
 }
-
-/*void System::SaveTrajectoryKITTI(const string &filename)
-{
-    cout << endl << "Saving camera trajectory to " << filename << " ..." << endl;
-    if(mSensor==MONOCULAR)
-    {
-        cerr << "ERROR: SaveTrajectoryKITTI cannot be used for monocular." << endl;
-        return;
-    }
-
-    vector<KeyFrame*> vpKFs = mpAtlas->GetAllKeyFrames();
-    sort(vpKFs.begin(),vpKFs.end(),KeyFrame::lId);
-
-    // Transform all keyframes so that the first keyframe is at the origin.
-    // After a loop closure the first keyframe might not be at the origin.
-    cv::Mat Two = vpKFs[0]->GetPoseInverse();
-
-    ofstream f;
-    f.open(filename.c_str());
-    f << fixed;
-
-    // Frame pose is stored relative to its reference keyframe (which is optimized by BA and pose graph).
-    // We need to get first the keyframe pose and then concatenate the relative transformation.
-    // Frames not localized (tracking failure) are not saved.
-
-    // For each frame we have a reference keyframe (lRit), the timestamp (lT) and a flag
-    // which is true when tracking failed (lbL).
-    list<ORB_SLAM3::KeyFrame*>::iterator lRit = mpTracker->mlpReferences.begin();
-    list<double>::iterator lT = mpTracker->mlFrameTimes.begin();
-    for(list<cv::Mat>::iterator lit=mpTracker->mlRelativeFramePoses.begin(), lend=mpTracker->mlRelativeFramePoses.end();lit!=lend;lit++, lRit++, lT++)
-    {
-        ORB_SLAM3::KeyFrame* pKF = *lRit;
-
-        cv::Mat Trw = cv::Mat::eye(4,4,CV_32F);
-
-        while(pKF->isBad())
-        {
-            Trw = Trw * Converter::toCvMat(pKF->mTcp.matrix());
-            pKF = pKF->GetParent();
-        }
-
-        Trw = Trw * pKF->GetPoseCv() * Two;
-
-        cv::Mat Tcw = (*lit)*Trw;
-        cv::Mat Rwc = Tcw.rowRange(0,3).colRange(0,3).t();
-        cv::Mat twc = -Rwc*Tcw.rowRange(0,3).col(3);
-
-        f << setprecision(9) << Rwc.at<float>(0,0) << " " << Rwc.at<float>(0,1)  << " " << Rwc.at<float>(0,2) << " "  << twc.at<float>(0) << " " <<
-             Rwc.at<float>(1,0) << " " << Rwc.at<float>(1,1)  << " " << Rwc.at<float>(1,2) << " "  << twc.at<float>(1) << " " <<
-             Rwc.at<float>(2,0) << " " << Rwc.at<float>(2,1)  << " " << Rwc.at<float>(2,2) << " "  << twc.at<float>(2) << endl;
-    }
-    f.close();
-}*/
 
 void System::SaveTrajectoryKITTI(const string &filename)
 {

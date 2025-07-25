@@ -25,6 +25,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string>
+#include <vector>
 #include<thread>
 #include<opencv2/core/core.hpp>
 
@@ -99,10 +100,18 @@ public:
         BINARY_FILE=1,
     };
 
+	Viewer* GetViewer() {
+        return mpViewer;
+    };
+
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     // Initialize the SLAM system. It launches the Local Mapping, Loop Closing and Viewer threads.
     System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor, const bool bUseViewer = true, const int initFr = 0, const string &strSequence = std::string());
+
+	// Setup getter functions
+	std::vector<cv::Point3f> GetTrackedMapPointsAsCv();
+	cv::Mat GetCurrentCameraPose();
 
     // Proccess the given stereo frame. Images must be synchronized and rectified.
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
